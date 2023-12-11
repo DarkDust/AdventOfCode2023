@@ -1,19 +1,19 @@
-use std::error::Error;
 use std::time::Instant;
 
-fn part1(input: &str) -> Result<(), Box<dyn Error>> {
+#[derive(Debug)]
+enum Error {}
 
+fn part1(input: &str) -> Result<(), Error> {
     println!("Part 1: TBD");
     return Ok(());
 }
 
-fn part2(input: &str) -> Result<(), Box<dyn Error>> {
-
+fn part2(input: &str) -> Result<(), Error> {
     println!("Part 2: TBD");
     return Ok(());
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Error> {
     let input = include_str!("../rsc/sample1.txt");
 
     let start1 = Instant::now();

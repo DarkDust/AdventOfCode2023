@@ -57,17 +57,13 @@ impl Contraption {
         let fields = maybe_fields?;
         let count_x = fields[0].len();
         let count_y = fields.len();
-        let beam = Beam {
-            pos: (0, 0),
-            dir: Direction::East,
-        };
         Ok(Contraption {
             fields,
             count_x,
             count_y,
             energized: HashSet::new(),
             cycle_detector: HashSet::new(),
-            beams: vec![beam],
+            beams: Vec::new(),
         })
     }
 
@@ -164,7 +160,11 @@ impl Contraption {
         result
     }
 
-    fn trace_beams(&mut self) {
+    fn trace_from(&mut self, pos: (usize, usize), dir: Direction) -> usize {
+        self.beams = vec![Beam { pos, dir }];
+        self.cycle_detector.clear();
+        self.energized.clear();
+
         while !self.beams.is_empty() {
             let old_beams: Vec<_> = self.beams.drain(..).collect();
             for beam in old_beams {
@@ -172,18 +172,8 @@ impl Contraption {
                 self.beams.append(&mut advanced);
             }
         }
-    }
 
-    fn count_energized(&self) -> usize {
         self.energized.len()
-    }
-
-    fn trace_from(&mut self, pos: (usize, usize), dir: Direction) -> usize {
-        self.beams = vec![Beam { pos, dir }];
-        self.cycle_detector.clear();
-        self.energized.clear();
-        self.trace_beams();
-        return self.count_energized();
     }
 
     fn trace_beams_from_all_sides(&mut self) -> usize {
@@ -204,8 +194,7 @@ impl Contraption {
 
 fn part1(input: &str) -> Result<(), Error> {
     let mut contraption = Contraption::new(input)?;
-    contraption.trace_beams();
-    println!("Part 1: {}", contraption.count_energized());
+    println!("Part 1: {}", contraption.trace_from((0, 0), East));
     return Ok(());
 }
 

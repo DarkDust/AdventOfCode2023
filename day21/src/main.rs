@@ -92,6 +92,24 @@ impl Map {
     }
 }
 
+fn interpolate(values: Vec<(isize, isize)>, xi: isize) -> isize {
+    let mut result: f64 = 0.0;
+
+    for i in 0..values.len() {
+        let mut term = values[i].1 as f64;
+        for j in 0..values.len() {
+            if i == j {
+                continue;
+            }
+
+            term *= (xi - values[j].0) as f64 / (values[i].0 - values[j].0) as f64;
+        }
+        result += term
+    }
+
+    result as isize
+}
+
 fn part1(input: &str) -> Result<(), Error> {
     let mut map = Map::new(input)?;
     for _ in 0..64 {
@@ -103,15 +121,32 @@ fn part1(input: &str) -> Result<(), Error> {
 
 fn part2(input: &str) -> Result<(), Error> {
     let mut map = Map::new(input)?;
-    for _ in 0..50 {
-        map = map.step(Map::next_steps_limited);
+    let x1 = map.x_len / 2;
+    let x2 = x1 + map.x_len;
+    let x3 = x2 + map.x_len;
+    let mut y1 = 0;
+    let mut y2 = 0;
+    let mut y3 = 0;
+
+    for i in 1..=x3 {
+        map = map.step(Map::next_steps_infinite);
+        if i == x1 {
+            y1 = map.positions.len() as isize;
+        } else if i == x2 {
+            y2 = map.positions.len() as isize;
+        } else if i == x3 {
+            y3 = map.positions.len() as isize;
+        }
     }
-    println!("Part 2: I have no idea how to find this, yet.");
+
+    let values = vec![(x1, y1), (x2, y2), (x3, y3)];
+    println!("Part 2: {}", interpolate(values, 26501365));
+
     return Ok(());
 }
 
 fn main() -> Result<(), Error> {
-    let input = include_str!("../rsc/sample1.txt");
+    let input = include_str!("../rsc/input.txt");
 
     let start1 = Instant::now();
     part1(input)?;

@@ -244,12 +244,13 @@ impl PathFinder {
             return None;
         }
 
-        if let Some(known_distance) = self.max_distances.get(&to) {
-            if visited.len() + 1 < *known_distance {
-                // There's already a path that's known to be longer.
-                return None;
-            }
-        }
+        // Didn't work for part 2. Brute force it. Took 41min on my machine.
+        // if let Some(known_distance) = self.max_distances.get(&to) {
+        //     if visited.len() + 1 < *known_distance {
+        //         // There's already a path that's known to be longer.
+        //         return None;
+        //     }
+        // }
 
         Some(to)
     }

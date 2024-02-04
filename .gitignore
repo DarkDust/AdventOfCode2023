@@ -12,3 +12,12 @@ Cargo.lock
 
 # Advent Of Code inputs
 **/rsc/
+
+# VS Code stuff
+**/.vscode
+
+# Assembler stuff
+# Ignore the dayXX binaries, but allow dayXX.s
+ARM64/day*/day*
+!ARM64/day*/day*.*
+*.o

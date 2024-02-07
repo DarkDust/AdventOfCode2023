@@ -1,18 +1,24 @@
+//////////////////////////////////////////////////////////////////////////////
+
+// uint64_t strlen(void const * const str);
+// Get length of a null-terminated string.
+.global _strlen
+
+//////////////////////////////////////////////////////////////////////////////
+
 COUNT .req X0
 ALIGNED .req X1
 INDEX .req X2
 TMP .req X3
 BUFFER .req X5
 
-// uint64_t strlen(void const * const str);
-// Get length of a null-terminated string.
-//
 // Semi-naive version assuming little-endian. Fetches aligned 8-byte chunks, but then simply
 // iterates over the 8 fetched bytes.
 .align 4
-.global _strlen
 _strlen:
     stp FP, LR, [SP, #-16]!
+    mov FP, SP
+
     cmp X0, XZR                     // Is the input a NULL pointer?
     b.eq L_return                   // If so, just leave. X0 = return value = already 0.
 
@@ -45,5 +51,6 @@ L_load_next:
     b L_loop
 
 L_return:
+    mov SP, FP
     ldp FP, LR, [SP], #16
     ret

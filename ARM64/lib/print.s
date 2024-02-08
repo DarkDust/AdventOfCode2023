@@ -27,8 +27,7 @@ _print_newline:
 	mov X0, #FD_STDOUT
 	sub X1, SP, #4 // Address of the pushed '\n'
 	mov X2, #1 // Length to write
-	mov X16, #SYSCALL_WRITE
-	svc 80
+	SYSCALL #SYSCALL_WRITE
 	ret
 
 .align 4
@@ -62,8 +61,7 @@ L_done:
 	mov X0, #FD_STDOUT
 	mov X1, X3
 	mov	X2, #16 // length of hex digit
-	mov	X16, #SYSCALL_WRITE
-	svc	#0x80
+	SYSCALL #SYSCALL_WRITE
 
 	mov SP, FP
 	ldp FP, LR, [SP], #16
@@ -73,6 +71,5 @@ _print_n:
 	mov X2, X1	// Move length to correct register
 	mov X1, X0	// Move string pointer to correct register
 	mov X0, #FD_STDOUT
-	mov X16, #SYSCALL_WRITE
-	svc #0x80
+	SYSCALL #SYSCALL_WRITE
 	ret

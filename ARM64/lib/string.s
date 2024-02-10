@@ -9,6 +9,11 @@
 // the given handler is called with an additional context.
 .global _iterate_chars
 
+// void iterate_lines(char const * const str, uint64_t len, void * context, void (*handler) (char const * const line, uint64_t len, void * context));
+// Iterate over the lines in a string of a given length. For each line (start
+// address + length), the given handler is called with an additional context.
+.global _iterate_lines
+
 //////////////////////////////////////////////////////////////////////////////
 
 SL_COUNT .req X0
@@ -124,6 +129,103 @@ L_ic_return0:
     mov X0, #0
 L_ic_return:
     ldr X26, [SP], #16
+    ldp X24, X25, [SP], #16
+    ldp X22, X23, [SP], #16
+    ldp X20, X21, [SP], #16
+    mov SP, FP
+    ldp FP, LR, [SP], #16
+    ret
+
+
+IL_COUNT .req X20
+IL_ALIGNED .req X21
+IL_INDEX .req X22
+IL_TMP .req X23
+IL_BUFFER .req X24
+IL_HANDLER .req X25
+IL_CONTEXT .req X26
+IL_LINESTART .req X27
+
+// Assumes little-endian. Fetches aligned 8-byte chunks.
+.balign 4
+_iterate_lines:
+    stp FP, LR, [SP, #-16]!
+    mov FP, SP
+    stp X20, X21, [SP, #-16]!
+    stp X22, X23, [SP, #-16]!
+    stp X24, X25, [SP, #-16]!
+    stp X26, X27, [SP, #-16]!
+    str X28, [SP, #-16]!
+
+    cmp X0, XZR                     // Is the input a NULL pointer?
+    b.eq L_il_return                // If so, just leave. X0 = return value = already 0.
+
+    cmp X1, XZR                     // Is length 0?
+    b.eq L_il_return0               // If so, just leave. X0 = return value = already 0.
+
+    mov IL_COUNT, X1                // Save some values from the volatile registers
+    mov IL_HANDLER, X2
+    mov IL_CONTEXT, X3
+
+    mov IL_LINESTART, X0            // Set first line start
+    bic IL_ALIGNED, X0, #7          // Round down to nearest aligned address.
+    ldr IL_BUFFER, [IL_ALIGNED]     // Load 8 bytes
+    subs IL_INDEX, X0, IL_ALIGNED   // By how many bytes was the pointer misaligned?
+
+    b.eq L_il_aligned               // Skip shifting if pointer was already aligned.
+    lsl IL_TMP, IL_INDEX, #3        // Misaligned in bits: IL_TMP = IL_INDEX * 8
+    lsrv IL_BUFFER, IL_BUFFER, IL_TMP // Shift to offset the misalignment.
+
+L_il_aligned:
+    mov IL_TMP, #8
+    sub IL_INDEX, IL_TMP, IL_INDEX  // Start loop: convert misaligned offset into number of bytes
+                                    // left to process: INDEX = 8 - INDEX, 
+
+L_il_loop:
+    and X0, IL_BUFFER, #0xFF        // Extract byte for handler.
+    cmp X0, #'\n'                   // Is it a newline?
+    b.ne L_il_next_char             // No? Fetch next char.
+
+    mov X0, IL_LINESTART            // Arg 1: pointer to line start.
+    sub X1, IL_TMP, IL_INDEX        // Arg 2: line length. Calculate offset from aligned.
+    add X1, X1, IL_ALIGNED          // Add offset to aligned. Now we have a pointer to the line end.
+    add IL_LINESTART, X1, #1        // Save next line start.
+    sub X1, X1, X0                  // Calculate length.
+    mov X2, IL_CONTEXT              // Arg 3: Context.
+    blr IL_HANDLER                  // Call handler
+
+L_il_next_char:
+    subs IL_COUNT, IL_COUNT, #1     // Decrement length.
+    b.eq L_il_end_of_string         // All bytes processed.
+
+    subs IL_INDEX, IL_INDEX, #1     // INDEX -= 1
+    b.eq L_il_load_next             // if INDEX == 0 load next 8 bytes
+    lsr IL_BUFFER, IL_BUFFER, #8    // Check next byte
+    b L_il_loop
+
+L_il_load_next:
+    ldr IL_BUFFER, [IL_ALIGNED, #8]! // Fetch next 8 bytes
+    mov IL_INDEX, #8
+    b L_il_loop
+
+L_il_end_of_string:
+    sub IL_INDEX, IL_INDEX, #1      // Need to do the skipped INDEX -= 1
+    sub X1, IL_TMP, IL_INDEX        // Calculate offset from aligned.
+    add X1, X1, IL_ALIGNED          // Add offset to aligned. Now we have a pointer to the line end.
+    cmp X1, IL_LINESTART            // Did the string end with a newline?
+    b.eq L_il_return0               // If so, we're done.
+
+    // Otherwise, the handler needs to be called one more time.
+    mov X0, IL_LINESTART            // Arg 1: pointer to line start.
+    sub X1, X1, IL_LINESTART        // Arg 2: Calculate length.
+    mov X2, IL_CONTEXT              // Arg 3: Context.
+    blr IL_HANDLER                  // Call handler
+
+L_il_return0:
+    mov X0, #0
+L_il_return:
+    ldr X28, [SP], #16
+    ldp X26, X27, [SP], #16
     ldp X24, X25, [SP], #16
     ldp X22, X23, [SP], #16
     ldp X20, X21, [SP], #16

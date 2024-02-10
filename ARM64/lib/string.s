@@ -14,7 +14,7 @@ BUFFER .req X5
 
 // Semi-naive version assuming little-endian. Fetches aligned 8-byte chunks, but then simply
 // iterates over the 8 fetched bytes.
-.align 4
+.balign 4
 _strlen:
     stp FP, LR, [SP, #-16]!
     mov FP, SP

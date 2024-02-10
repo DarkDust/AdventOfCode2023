@@ -25,21 +25,22 @@
 .lcomm buffer, BUFFER_SIZE
 
 .const
+.balign 8
 log2_10: .double 3.321928094887362 // log2(10)
 
 .text
 
-.align 4
+.balign 4
 _print_newline:
 	mov W0, #'\n'
-	strb W0, [SP, #-4] // Push '\n' on the stack
+	strb W0, [SP, #-16]! // Push '\n' on the stack
 	mov X0, #FD_STDOUT
-	sub X1, SP, #4 // Address of the pushed '\n'
+	mov X1, SP // Address of the pushed '\n'
 	mov X2, #1 // Length to write
 	SYSCALL #SYSCALL_WRITE
 	ret
 
-.align 4
+.balign 4
 _print_hex64:
 	stp FP, LR, [SP, #-16]!
 	mov FP, SP
@@ -77,7 +78,7 @@ L_done:
 	ret
 
 
-.align 4
+.balign 4
 _print_uint64:
 	stp FP, LR, [SP, #-16]!
 	mov FP, SP
@@ -143,7 +144,7 @@ _print_uint64:
 	ret
 
 
-.align 4
+.balign 4
 _print_n:
 	mov X2, X1	// Move length to correct register
 	mov X1, X0	// Move string pointer to correct register

@@ -134,9 +134,16 @@ _print_uint64:
 
 	// We're done! We can print it.
 
-	mov X0, #FD_STDOUT
-	mov X1, SP // String starts at the SP
-	mov X2, X5 // Still number of digits.
+	mov X1, SP	// Start of our buffer
+	mov X2, X5	// Still number of digits
+
+	cmp W4, #'0'	// Account for imprecision due to rounding above: if first digit is 0,
+	b.ne 2f			// skip the first character.
+
+	add X1, X1, #1
+	sub X2, X2, #1
+
+2:	mov X0, #FD_STDOUT
 	SYSCALL #SYSCALL_WRITE
 
 	mov SP, FP // Restore the stack, undoing our "allocation"

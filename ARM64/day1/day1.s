@@ -20,11 +20,19 @@ _main:
     str X0, [SP, #-16]!
 
     bl _part1
+
+    // Get "now" and calculate elapsed time.
+    bl _time_nanoseconds
+    ldr X1, [SP]
+    str X0, [SP]
+    sub X0, X0, X1
+    bl _print_elapsed
+
     bl _part2
 
     // Get "now" and calculate elapsed time.
     bl _time_nanoseconds
-    ldr X1, [SP], #16
+    ldr X1, [SP]
     sub X0, X0, X1
     bl _print_elapsed
 
@@ -206,35 +214,57 @@ _process_part2:
 _part2_get_num:
     stp FP, LR, [SP, #-16]!
     mov FP, SP
-
-    ldrb W3, [X0]       // Load the first byte
-    sub W4, W3, #'0'    // Is it a number?
-    cmp W4, #9
-    b.gt L_p2_nondigit  // If not, try the words
-
-    // It's a number! Return it.
-    mov X0, X4
-    mov SP, FP
-    ldp FP, LR, [SP], #16
-    ret
-
-L_p2_nondigit:
     // Save the string pointer and length
     stp X20, X21, [SP, #-16]!
-    mov X20, X0
-    mov X21, X1
 
-    P2_CHECKPREFIX str_one, 1
-    P2_CHECKPREFIX str_two, 2
-    P2_CHECKPREFIX str_three, 3
+    ldrb W3, [X0]           // Load the first byte
+    cmp W3, #'e'            // Starts with 'e'?
+    b.eq L_p2_nondigit_e
+    cmp W3, #'f'            // Starts with 'f'?
+    b.eq L_p2_nondigit_f
+    cmp W3, #'n'            // Starts with 'n'?
+    b.eq L_p2_nondigit_n
+    cmp W3, #'o'            // Starts with 'o'?
+    b.eq L_p2_nondigit_o
+    cmp W3, #'s'            // Starts with 's'?
+    b.eq L_p2_nondigit_s
+    cmp W3, #'t'            // Starts with 't'?
+    b.eq L_p2_nondigit_t
+    sub W4, W3, #'0'        // Is it a number?
+    cmp W4, #9
+    b.gt L_p2_return_false  // Nothing matched, ignore.
+    mov X0, X4              // It's a number! Return it.
+    b L_p2_return
+
+L_p2_nondigit_e:
+    P2_CHECKPREFIX str_eight, 8
+    b L_p2_return_false
+
+L_p2_nondigit_f:
     P2_CHECKPREFIX str_four, 4
     P2_CHECKPREFIX str_five, 5
+    b L_p2_return_false
+
+L_p2_nondigit_n:
+    P2_CHECKPREFIX str_nine, 9
+    b L_p2_return_false
+
+L_p2_nondigit_o:
+    P2_CHECKPREFIX str_one, 1
+    b L_p2_return_false
+
+L_p2_nondigit_s:
     P2_CHECKPREFIX str_six, 6
     P2_CHECKPREFIX str_seven, 7
-    P2_CHECKPREFIX str_eight, 8
-    P2_CHECKPREFIX str_nine, 9
+    b L_p2_return_false
+
+L_p2_nondigit_t:
+    P2_CHECKPREFIX str_two, 2
+    P2_CHECKPREFIX str_three, 3
+    b L_p2_return_false
 
     // Nothing found.
+L_p2_return_false:
     mov X0, 0
 L_p2_return:
     ldp X20, X21, [SP], #16

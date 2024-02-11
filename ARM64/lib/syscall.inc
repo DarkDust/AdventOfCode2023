@@ -1,10 +1,21 @@
-// Various defines
+// Various defines for system calls.
+// The sources are relative to the XNU kernel sources root directory.
 
 // Kernel: "exit"
+// Source: bsd/kern/syscalls.master
 .equ SYSCALL_EXIT, 1
 
 // Kernel: "write"
+// Source: bsd/kern/syscalls.master
 .equ SYSCALL_WRITE, 4
+
+// Kernel: "mach_timebase_info"
+// Source: osfmk/mach/syscall_sw.h
+.equ SYSCALL_MACH_TIMEBASE_INFO, -89
+
+// Kernel: "MACH_ARM_TRAP_CONTTIME" aka "mach_continuous_time".
+// Source: osfmk/mach/arm/traps.h
+.equ SYSCALL_MACH_CONTINUOUS_TIME, -4
 
 // File descriptor: stdin
 .equ FD_STDIN, 0

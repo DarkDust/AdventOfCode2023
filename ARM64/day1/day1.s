@@ -14,8 +14,19 @@
 .balign 4
 .global _main
 _main:
+    // Setup time and remember current timestamp.
+    bl _setup_time
+    bl _time_nanoseconds
+    str X0, [SP, #-16]!
+
     bl _part1
     bl _part2
+
+    // Get "now" and calculate elapsed time.
+    bl _time_nanoseconds
+    ldr X1, [SP], #16
+    sub X0, X0, X1
+    bl _print_elapsed
 
     mov X0, #0
     mov X16, #SYSCALL_EXIT

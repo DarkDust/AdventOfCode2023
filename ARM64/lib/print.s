@@ -138,7 +138,9 @@ _print_uint64:
 	mov X2, X5	// Still number of digits
 
 	cmp W4, #'0'	// Account for imprecision due to rounding above: if first digit is 0,
-	b.ne 2f			// skip the first character.
+	b.ne 2f			// skip the first character ...
+	cmp X5, #1		// ... except if it's the only character.
+	b.eq 2f
 
 	add X1, X1, #1
 	sub X2, X2, #1

@@ -14,6 +14,10 @@
 // address + length), the given handler is called with an additional context.
 .global _iterate_lines
 
+// bool has_prefix(char const * const str, uint64_t strlen, char const * const prefix, uint64_t prefixlen);
+// Returns whether a string starts with a prefix.
+.global _has_prefix
+
 //////////////////////////////////////////////////////////////////////////////
 
 SL_COUNT .req X0
@@ -184,15 +188,7 @@ L_il_aligned:
 L_il_loop:
     and X0, IL_BUFFER, #0xFF        // Extract byte for handler.
     cmp X0, #'\n'                   // Is it a newline?
-    b.ne L_il_next_char             // No? Fetch next char.
-
-    mov X0, IL_LINESTART            // Arg 1: pointer to line start.
-    sub X1, IL_TMP, IL_INDEX        // Arg 2: line length. Calculate offset from aligned.
-    add X1, X1, IL_ALIGNED          // Add offset to aligned. Now we have a pointer to the line end.
-    add IL_LINESTART, X1, #1        // Save next line start.
-    sub X1, X1, X0                  // Calculate length.
-    mov X2, IL_CONTEXT              // Arg 3: Context.
-    blr IL_HANDLER                  // Call handler
+    b.eq L_il_call_handler          // Yes? Call the handler.
 
 L_il_next_char:
     subs IL_COUNT, IL_COUNT, #1     // Decrement length.
@@ -202,6 +198,16 @@ L_il_next_char:
     b.eq L_il_load_next             // if INDEX == 0 load next 8 bytes
     lsr IL_BUFFER, IL_BUFFER, #8    // Check next byte
     b L_il_loop
+
+L_il_call_handler:
+    mov X0, IL_LINESTART            // Arg 1: pointer to line start.
+    sub X1, IL_TMP, IL_INDEX        // Arg 2: line length. Calculate offset from aligned.
+    add X1, X1, IL_ALIGNED          // Add offset to aligned. Now we have a pointer to the line end.
+    add IL_LINESTART, X1, #1        // Save next line start.
+    sub X1, X1, X0                  // Calculate length.
+    mov X2, IL_CONTEXT              // Arg 3: Context.
+    blr IL_HANDLER                  // Call handler
+    b L_il_next_char
 
 L_il_load_next:
     ldr IL_BUFFER, [IL_ALIGNED, #8]! // Fetch next 8 bytes
@@ -229,6 +235,80 @@ L_il_return:
     ldp X24, X25, [SP], #16
     ldp X22, X23, [SP], #16
     ldp X20, X21, [SP], #16
+    mov SP, FP
+    ldp FP, LR, [SP], #16
+    ret
+
+
+HP_STR .req X0
+HP_STRLEN .req X1
+HP_PREFIX .req X2
+HP_PREFIXLEN .req X3
+HP_CHUNKLEN .req X4
+HP_STRCHUNK .req X5
+HP_PREFIXCHUNK .req X6
+HP_EIGHT .req X7
+
+.balign 4
+_has_prefix:
+    stp FP, LR, [SP, #-16]!
+    mov FP, SP
+
+    cmp HP_PREFIXLEN, HP_STRLEN // Is the prefix length greater than the string length?
+    b.hi L_hs_return_false      // If so, leave.
+
+    // prefixlen <= strlen past this point
+    mov HP_EIGHT, #8
+
+L_hs_loop:
+    cbz HP_PREFIXLEN, L_hs_return_true  // Success if nothing left to compare.
+
+    mov HP_CHUNKLEN, HP_PREFIXLEN
+    cmp HP_CHUNKLEN, HP_EIGHT           // A whole 8 byte chunk?
+    csel HP_CHUNKLEN, HP_EIGHT, HP_CHUNKLEN, hi // chunklen = MIN(chunklen, 8)
+    b.lt L_hs_check_remainder4          // If smaller than 8 bytes, go to remainder path.
+
+    ldr HP_STRCHUNK, [HP_STR], #8       // Fetch chunks, advance the pointers
+    ldr HP_PREFIXCHUNK, [HP_PREFIX], #8
+    sub HP_PREFIXLEN, HP_PREFIXLEN, #8  // Reduce remaining prefix len.
+    cmp HP_STRCHUNK, HP_PREFIXCHUNK     // Compare them.
+    b.ne L_hs_return_false              // If not equal, return false.
+    b L_hs_loop
+
+L_hs_check_remainder4:
+    cmp HP_CHUNKLEN, #4                 // Chunk len >= 4?
+    b.lt L_hs_check_remainder2          // If not try smaller chunk.
+    ldr W5, [HP_STR], #4                // Load 4 byte chunks and compare them.
+    ldr W6, [HP_PREFIX], #4
+    sub HP_CHUNKLEN, HP_CHUNKLEN, #4
+    cmp W5, W6
+    b.ne L_hs_return_false
+
+L_hs_check_remainder2:
+    cmp HP_CHUNKLEN, #2                 // Chunk len >= 2?
+    b.lt L_hs_check_remainder1          // If not try smaller chunk.
+    ldrh W5, [HP_STR], #2               // Load 2 byte chunks and compare them.
+    ldrh W6, [HP_PREFIX], #2
+    sub HP_CHUNKLEN, HP_CHUNKLEN, #2
+    cmp W5, W6
+    b.ne L_hs_return_false
+
+L_hs_check_remainder1:
+    cmp HP_CHUNKLEN, #1                 // Chunk len >= 1?
+    b.lt L_hs_return_true               // If not we're done, sucess.
+    ldrb W5, [HP_STR]                   // Load 1 byte chunks and compare them.
+    ldrb W6, [HP_PREFIX]
+    cmp W5, W6
+    b.ne L_hs_return_false
+
+L_hs_return_true:
+    mov X0, #1
+    mov SP, FP
+    ldp FP, LR, [SP], #16
+    ret
+
+L_hs_return_false:
+    mov X0, #0
     mov SP, FP
     ldp FP, LR, [SP], #16
     ret

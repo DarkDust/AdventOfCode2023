@@ -15,6 +15,7 @@
 .global _main
 _main:
     bl _part1
+    bl _part2
 
     mov X0, #0
     mov X16, #SYSCALL_EXIT
@@ -46,7 +47,7 @@ _part1:
     mov X1, SP                          // "Context"
     bl _process_part1
 
-1:  adrp X0, str_part1@PAGE             // Print the `Part1:` string
+1:  adrp X0, str_part1@PAGE             // Print "Part 1:"
     add X0, X0, str_part1@PAGEOFF
     mov X1, #str_part1_len
     bl _print_n
@@ -97,22 +98,156 @@ L_p1_return:
     ldp FP, LR, [SP], #16
     ret
 
+
 .balign 4
-_handler:
-    strb W0, [SP, #-16]! // Push the byte on the stack
+_part2:
+    stp FP, LR, [SP, #-16]!
+    mov FP, SP
 
-    mov X0, #FD_STDOUT
-    mov X1, SP // Adress of pushed byte
-    mov X2, #1
-    SYSCALL #SYSCALL_WRITE
+    // Reserve some space for our variables and initialize them.
+    sub SP, SP, #16
+    str WZR, [SP, #OFFSET_TOTAL]        // Set 'total' = 0
 
-    add SP, SP, 16 // Pop
+    adrp X0, str_input@PAGE             // Load input string address
+    add X0, X0, str_input@PAGEOFF
+    mov X1, #str_input_len              // Set input string length
+    adrp X2, _process_part2@PAGE        // Load handler address
+    add X2, X2, _process_part2@PAGEOFF
+    mov X3, SP                          // "Context": address for our variables
+    bl _iterate_lines
+
+    adrp X0, str_part2@PAGE             // Print "Part 1:"
+    add X0, X0, str_part2@PAGEOFF
+    mov X1, #str_part2_len
+    bl _print_n
+
+    ldr W0, [SP, #OFFSET_TOTAL]         // Load 'total'.
+    bl _print_uint64                    // Print 'total'.
+    bl _print_newline
+
+    mov SP, FP
+    ldp FP, LR, [SP], #16
     ret
 
+P2_LINE .req X20
+P2_LINELEN .req X21
+P2_CONTEXT .req X22
+P2_FIRST .req X24
+P2_LAST .req X25
+
+.balign 4
+_process_part2:
+    stp FP, LR, [SP, #-16]!
+    mov FP, SP
+    stp X20, X21, [SP, #-16]!
+    stp X22, X23, [SP, #-16]!
+    stp X24, X25, [SP, #-16]!
+
+    // Save a few values.
+    mov P2_LINE, X0
+    mov P2_LINELEN, X1
+    mov P2_CONTEXT, X2
+    mov P2_FIRST, #-1
+    mov P2_LAST, #-1
+
+1:  mov X0, P2_LINE
+    mov X1, P2_LINELEN
+    bl _part2_get_num // Try to parse the number at current location
+    cbz X0, 2f
+
+    cmp P2_FIRST, #-1               // Is 'first' still -1?
+    csel P2_FIRST, X0, P2_FIRST, eq // If so, save number in X0, otherwise retain previous value
+    mov P2_LAST, X0
+
+2:  add P2_LINE, P2_LINE, #1        // Advance pointer …
+    sub P2_LINELEN, P2_LINELEN, #1  // … and decrease length.
+    cbnz P2_LINELEN, 1b             // Loop if length != 0
+
+    // End of line reached.
+    mov W1, #10
+    mul X0, P2_FIRST, X1                    // X0 = 'first' * 10
+    add X0, X0, P2_LAST                     // X0 += 'last'
+    ldr W1, [P2_CONTEXT, #OFFSET_TOTAL]     // Load 'total'
+    add W1, W1, W0                          // total += W0
+    str W1, [P2_CONTEXT, #OFFSET_TOTAL]     // Save 'total'
+
+    ldp X24, X25, [SP], #16
+    ldp X22, X23, [SP], #16
+    ldp X20, X21, [SP], #16
+    mov SP, FP
+    ldp FP, LR, [SP], #16
+    ret
+
+
+.macro P2_CHECKPREFIX prefix, value
+    mov X0, X20                     // Arg 1: (remaining) line pointer
+    mov X1, X21                     // Arg 2: (remaining) line length
+    adrp X2, \prefix\()@PAGE        // Arg 3: address of prefix
+    add X2, X2, \prefix\()@PAGEOFF
+    mov X3, #\prefix\()_len         // Arg 4: length of prefix
+    bl _has_prefix                  // Call "has_prefix"
+    mov X1, #\value                 // Load the value the prefix should represent
+    mul X0, X0, X1                  // X0 is either 0 or 1 here; multiply with value
+    cbnz X0, L_p2_return            // If X0 contains a value, return
+.endmacro
+
+.balign 4
+_part2_get_num:
+    stp FP, LR, [SP, #-16]!
+    mov FP, SP
+
+    ldrb W3, [X0]       // Load the first byte
+    sub W4, W3, #'0'    // Is it a number?
+    cmp W4, #9
+    b.gt L_p2_nondigit  // If not, try the words
+
+    // It's a number! Return it.
+    mov X0, X4
+    mov SP, FP
+    ldp FP, LR, [SP], #16
+    ret
+
+L_p2_nondigit:
+    // Save the string pointer and length
+    stp X20, X21, [SP, #-16]!
+    mov X20, X0
+    mov X21, X1
+
+    P2_CHECKPREFIX str_one, 1
+    P2_CHECKPREFIX str_two, 2
+    P2_CHECKPREFIX str_three, 3
+    P2_CHECKPREFIX str_four, 4
+    P2_CHECKPREFIX str_five, 5
+    P2_CHECKPREFIX str_six, 6
+    P2_CHECKPREFIX str_seven, 7
+    P2_CHECKPREFIX str_eight, 8
+    P2_CHECKPREFIX str_nine, 9
+
+    // Nothing found.
+    mov X0, 0
+L_p2_return:
+    ldp X20, X21, [SP], #16
+    mov SP, FP
+    ldp FP, LR, [SP], #16
+    ret
 
 .const
 str_input: .incbin "../../day1/rsc/input.txt"
 str_input_len = (. - str_input)
 
-str_part1: .ascii "Part 1: "
-str_part1_len = (. - str_part1)
+.macro DEFINE_STRING name, text
+\name : .ascii "\text"
+\name\()_len = (. - \name)
+.endmacro
+
+DEFINE_STRING str_part1, "Part 1: "
+DEFINE_STRING str_part2, "Part 2: "
+DEFINE_STRING str_one, "one"
+DEFINE_STRING str_two, "two"
+DEFINE_STRING str_three, "three"
+DEFINE_STRING str_four, "four"
+DEFINE_STRING str_five, "five"
+DEFINE_STRING str_six, "six"
+DEFINE_STRING str_seven, "seven"
+DEFINE_STRING str_eight, "eight"
+DEFINE_STRING str_nine, "nine"

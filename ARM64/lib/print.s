@@ -38,6 +38,7 @@ _print_newline:
 	mov X1, SP // Address of the pushed '\n'
 	mov X2, #1 // Length to write
 	SYSCALL #SYSCALL_WRITE
+	add SP, SP, #16
 	ret
 
 .balign 4

@@ -1,4 +1,5 @@
 .include "syscall.inc"
+.include "utils.inc"
 
 .equ OFFSET_TOTAL, 0
 .equ OFFSET_FIRST, 4
@@ -10,7 +11,7 @@
     stp W3, W3, [\pointer, #OFFSET_FIRST]
 .endmacro
 
-
+.text
 .balign 4
 .global _main
 _main:
@@ -275,11 +276,6 @@ L_p2_return:
 .const
 str_input: .incbin "../../day1/rsc/input.txt"
 str_input_len = (. - str_input)
-
-.macro DEFINE_STRING name, text
-\name : .ascii "\text"
-\name\()_len = (. - \name)
-.endmacro
 
 DEFINE_STRING str_part1, "Part 1: "
 DEFINE_STRING str_part2, "Part 2: "

@@ -17,6 +17,18 @@
 // Source: osfmk/mach/arm/traps.h
 .equ SYSCALL_MACH_CONTINUOUS_TIME, -4
 
+// Kernel: "mach_task_self"
+// Source: osfmk/mach/syscall_sw.h
+.equ SYSCALL_MACH_TASK_SELF, -28
+
+// Kernel: "_kernelrpc_mach_vm_allocate_trap"
+// Source: osfmk/mach/syscall_sw.h
+.equ SYSCALL_MACH_VM_ALLOCATE, -10
+
+// Kernel: "_kernelrpc_mach_port_deallocate_trap"
+// Source: osfmk/mach/syscall_sw.h
+.equ SYSCALL_MACH_VM_DEALLOCATE, -12
+
 // File descriptor: stdin
 .equ FD_STDIN, 0
 

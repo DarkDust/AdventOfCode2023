@@ -14,3 +14,14 @@
     mov X1, \name\()_len
     bl _print_n
 .endmacro
+
+// Round up to nearest multiple.
+.macro ROUND_UP_CONST reg, value, multiple
+    mov \reg, #(((\value + \multiple - 1) / \multiple) * \multiple)
+.endmacro
+
+// Bit shift for memory page size.
+.equ PAGE_SHIFT, 12
+
+// Size of a memory page in bytes.
+.equ PAGE_SIZE, (1 << PAGE_SHIFT)

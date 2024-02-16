@@ -1,3 +1,8 @@
+// Bit shift for memory page size.
+.equ PAGE_SHIFT, 12
+
+// Size of a memory page in bytes.
+.equ PAGE_SIZE, (1 << PAGE_SHIFT)
 
 // Define a non-null-terminated string of the given name, plus a symbol of the name plus "_len"
 // with the length of the string.
@@ -20,8 +25,17 @@
     mov \reg, #(((\value + \multiple - 1) / \multiple) * \multiple)
 .endmacro
 
-// Bit shift for memory page size.
-.equ PAGE_SHIFT, 12
+// Round up to nearest multiple.
+.macro ROUND_UP_REG target, source, tmp, multiple
+    add \target, \source, #(\multiple - 1)
+    mov \tmp, #\multiple
+    udiv \target, \target, \tmp
+    mul \target, \target, \tmp
+.endmacro
 
-// Size of a memory page in bytes.
-.equ PAGE_SIZE, (1 << PAGE_SHIFT)
+// Round up to nearest page size.
+.macro ROUND_UP_PAGESIZE target, source
+    add \target, \source, #(\multiple - 1)
+    lsr \target, #PAGE_SHIFT
+    lsl \target, #PAGE_SHIFT
+.endmacro

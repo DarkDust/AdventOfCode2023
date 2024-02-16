@@ -38,6 +38,7 @@ _memset:
 
     // Now the pointer is 16-byte aligned. Try to copy 64 byte blocks. Like with Duff's Device,
     // jump into the loop body to account for the remainder of the 16-byte chunks.
+    // TODO: Might be able to optimize a tiny bit using RMIF
     lsr MS_COUNTER, MS_LEN, #4              // counter = len / 16
     ands MS_TMP, MS_COUNTER, #3             // tmp = counter % 4 (for jump into main loop)
     sub MS_COUNTER, MS_COUNTER, MS_TMP      // Adjust counter. Its value is now 4-chunks aligned.

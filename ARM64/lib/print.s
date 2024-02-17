@@ -21,8 +21,6 @@
 //////////////////////////////////////////////////////////////////////////////
 
 .equ BUFFER_SIZE, 16
-// 16 byte, all zeros.
-.lcomm buffer, BUFFER_SIZE
 
 .const
 .balign 8
@@ -46,10 +44,8 @@ _print_hex64:
 	stp FP, LR, [SP, #-16]!
 	mov FP, SP
 
+	sub SP, SP, #BUFFER_SIZE	// "Allocate" 16 bytes on the stack
 	mov X2, #(BUFFER_SIZE - 1)
-	adrp X3, buffer@PAGE
-	add	X3, X3, buffer@PAGEOFF
-	add X3, X3, X2 // end of buffer
 
 L_next_digit:
 	and X4, X0, #0xF
@@ -60,7 +56,7 @@ L_next_digit:
 L_hex:
 	add X4, X4, #('A' - 10)
 L_cont:
-	strb W4, [X3, X2]
+	strb W4, [SP, X2]
 	
 	cmp X2, 0
 	b.eq L_done
@@ -70,7 +66,7 @@ L_cont:
 
 L_done:
 	mov X0, #FD_STDOUT
-	mov X1, X3
+	mov X1, SP
 	mov	X2, #16 // length of hex digit
 	SYSCALL #SYSCALL_WRITE
 

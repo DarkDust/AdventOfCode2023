@@ -21,8 +21,6 @@
 //         uint32_t        numer;
 //         uint32_t        denom;
 // };
-.equ TIMEBASE_NUMER, 0
-.equ TIMEBASE_DENOM, 4
 .lcomm timebase_info, 8 
 
 .text
@@ -39,9 +37,7 @@ _time_nanoseconds:
     // X0 is in ticks. Need to convert using the timebase info.
     adrp X1, timebase_info@PAGE
     add X1, X1, timebase_info@PAGEOFF
-    ldr W2, [X1, #TIMEBASE_NUMER]
-    ldr W3, [X1, #TIMEBASE_DENOM]
-    ldp W4, W5, [X1]
+    ldp W2, W3, [X1] // Fetch "numer" and "denom" in one go.
     mul X0, X0, X2
     udiv X0, X0, X3
     ret

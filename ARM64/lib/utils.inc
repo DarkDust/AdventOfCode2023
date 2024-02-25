@@ -39,3 +39,11 @@
     lsr \target, #PAGE_SHIFT
     lsl \target, #PAGE_SHIFT
 .endmacro
+
+// Print a message and exit.
+.macro RUNTIME_ERROR str
+    adrp X0, \str\()@PAGE
+    add X0, X0, \str\()@PAGEOFF
+    mov X1, \str\()_len
+    bl _runtime_error
+.endmacro

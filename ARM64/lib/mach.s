@@ -2,71 +2,52 @@
 
 //////////////////////////////////////////////////////////////////////////////
 
-// uint64_t mach_task_self(void);
-// Get the Mach port number of the current task.
+// void mach_init(void);
+// Initialize Mach support. Call this early.
+.global _mach_init
+
+// extern uint64_t mach_task_self;
+// The Mach port number of the current task. Unlike in real C code, this is a
+// variable and not a function.
 .global _mach_task_self
 
-// int64_t mach_vm_allocate(uint64_t mach_port, void ** addr, uint64_t size, int64_t flags);
-// Allocate a region of memory.
-.global _mach_vm_allocate
-
-// int64_t mach_vm_deallocate(uint64_t mach_port, void * addr);
-// Deallocate a region of memory.
-.global _mach_vm_allocate
-
-// void * mach_alloc(uint64_t size);
-// Convenience function: allocate a region of memory. On success, a non-NULL
-// pointer is returned.
-.global _mach_alloc
-
-// void * mach_free(void * addr);
-// Convenience function: deallocate a region of memory. On success, 0 is
-// returned.
-.global _mach_free
+// extern uint32_t page_size;
+// Size of a memory page.
+.global _page_size
 
 //////////////////////////////////////////////////////////////////////////////
 
+// From xnu/osfmk/arm/cpu_abilities.h
+_COMM_PAGE64_RO_ADDRESS = 0x0000000FFFFF4000
+_COMM_PAGE_USER_PAGE_SHIFT_64 = (_COMM_PAGE64_RO_ADDRESS + 0x025)
+
+// The calculated page size.
+.balign 4
+.comm _page_size, 4
+
+// Cached mach_task_self value.
+.balign 8
+.comm _mach_task_self, 8
+
 .text
 .balign 4
-_mach_task_self:
-    // TODO: Can we cache the return value?
+_mach_init:
+    // Read the page size shift used by kernel from the comm page.
+    mov X0, #(_COMM_PAGE_USER_PAGE_SHIFT_64 & 0xFFFF)
+    movk X0, #((_COMM_PAGE_USER_PAGE_SHIFT_64 >> 16) & 0xFFFF), LSL #16
+    movk X0, #((_COMM_PAGE_USER_PAGE_SHIFT_64 >> 32) & 0xFFFF), LSL #32
+    movk X0, #((_COMM_PAGE_USER_PAGE_SHIFT_64 >> 48) & 0xFFFF), LSL #48
+    ldrb W1, [X0]
+    // Calculate the page size using the shift value.
+    mov W2, #1
+    lslv W3, W2, W1
+    // Store it.
+    adrp X4, _page_size@PAGE
+    str W3, [X4, _page_size@PAGEOFF]
+
+    // Get and cache mach_task_self
     SYSCALL SYSCALL_MACH_TASK_SELF
+    adrp X1, _mach_task_self@PAGE
+    str X0, [X1, _mach_task_self@PAGEOFF]
+
     ret
-
-.balign 4
-_mach_vm_allocate:
-    SYSCALL SYSCALL_MACH_VM_ALLOCATE
-    ret
-
-.balign 4
-_mach_alloc:
-    stp FP, LR, [SP, #-16]!
-    mov FP, SP
-    str XZR, [SP, #-16]!
-
-    mov X2, X0  // Arg 3 (used later): size.
-
-    SYSCALL SYSCALL_MACH_TASK_SELF
-                // Arg 1: mach_task_self
-    mov X1, SP  // Arg 2: Pointer to pointer
-                // Arg 3: size, already set above.
-    mov X3, #1  // Arg 4: VM_FLAGS_ANYWHERE
-    SYSCALL SYSCALL_MACH_VM_ALLOCATE
-    cbnz X0, 1f // On failure, return NULL.
-    ldr X0, [SP]// Load pointer
-    b 2f
-
-1:  mov X0, #0
-2:  mov SP, FP
-    ldp FP, LR, [SP], #16
-    ret
-
-.balign 4
-_mach_free:
-    cbz X0, 1f
-    mov X2, X1  // Arg 3 (used later): size to free.
-    mov X1, X0  // Arg 2 (used later): pointer to free.
- 
-    SYSCALL SYSCALL_MACH_TASK_SELF
-    SYSCALL SYSCALL_MACH_VM_DEALLOCATE
-1:  ret

@@ -23,6 +23,17 @@
 // Deallocate the given memory chunk.
 .global _free
 
+// (void *, uint64_t) malloc_wholepage(uint64_t size);
+// Allocate a memory chunk of at least the given size. Immediately "consumes"
+// the whole capacity and returns a pointer to the region and its size.
+.global _malloc_wholepage
+
+// (void *, uint64_t) realloc_wholepage(void * chunk, uint64_t additional_size);
+// Resize the given memory chunk by adding at least the given amount of memory.
+// Immediately "consumes" the whole capacity and returns a pointer to the new
+// region and its new size.
+.global _realloc_wholepage
+
 //////////////////////////////////////////////////////////////////////////////
 
 // Offset from memory chunk address: total size of the region.
@@ -238,6 +249,69 @@ L_realloc_copy_loop:
 
 L_realloc_failure:
     mov X0, #0 // Return null pointer
+    mov SP, FP
+    ldp FP, LR, [SP], #16
+    ret
+
+
+.balign 4
+_malloc_wholepage:
+    stp FP, LR, [SP, #-16]!
+    mov FP, SP
+
+    bl _malloc
+    cbz X0, L_mw_return // Leave if null pointer
+    ldr X1, [X0, #MEM_CHUNK_SIZE] // Get chunk size
+    sub X1, X1, #MEM_RECORD_SIZE  // Account for header
+    str X1, [X0, #MEM_CHUNK_USED] // "Consume" it.
+
+L_mw_return:
+    mov SP, FP
+    ldp FP, LR, [SP], #16
+    ret
+
+
+.balign 4
+_realloc_wholepage:
+    stp FP, LR, [SP, #-16]!
+    mov FP, SP
+
+    ldp RA_CHUNK_SIZE, RA_USED, [X0, #MEM_CHUNK_SIZE] // Load chunk size and what caller wanted so far.
+    add X2, RA_USED, X1 // Does the requested size still fit in the current chunk?
+    add X2, X2, #MEM_RECORD_SIZE
+    cmp RA_CHUNK_SIZE, X2
+    b.gt L_rw_cheap
+
+    // Get page size.
+    adrp RA_PAGE_SIZE, _page_size@PAGE
+    ldr RA_PAGE_SIZE_W, [RA_PAGE_SIZE, _page_size@PAGEOFF]
+
+    // Calculate how to call `realloc` to get the excact result wanted.
+    add X2, RA_CHUNK_SIZE, X1
+    add X2, X2, RA_PAGE_SIZE
+    sub X3, RA_PAGE_SIZE, #1 // Convert to bitmask (is always 1 << PAGE_SHIFT)
+    bic X3, X2, X3 // Round to page size
+    sub X1, X3, #MEM_RECORD_SIZE // Account for header size
+
+    bl _realloc
+    cbz X0, L_rw_failure
+
+    ldr X1, [X0, #MEM_CHUNK_USED] // Get the used amount
+    mov SP, FP
+    ldp FP, LR, [SP], #16
+    ret
+
+L_rw_cheap:
+    // The cheap (and somewhat surprising) case: just consome everything that's left.
+    sub X1, RA_CHUNK_SIZE, #MEM_RECORD_SIZE  // Account for header
+    str X1, [X0, #MEM_CHUNK_USED] // "Consume" it.
+
+    mov SP, FP
+    ldp FP, LR, [SP], #16
+    ret
+
+L_rw_failure:
+    mov X1, #0
     mov SP, FP
     ldp FP, LR, [SP], #16
     ret

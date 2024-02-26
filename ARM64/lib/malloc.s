@@ -14,7 +14,7 @@
 // needs to fetch another memory region from kernel.
 .global _malloc_capacity
 
-// void * realloc(void * chunk, uint64_t newSize);
+// void * realloc(void * chunk, uint64_t new_size);
 // Resize the given memory chunk. In the worst case, a new memory area is
 // allocated and the old content is copied.
 .global _realloc
@@ -122,7 +122,7 @@ _realloc:
     cbz X0, L_realloc_malloc // addr == NULL? Delegate to malloc.
 
     ldp RA_CHUNK_SIZE, RA_USED, [X0, #MEM_CHUNK_SIZE] // Load chunk size and what caller wanted so far.
-    add RA_NEW_USED, X1, RA_USED // Calculate new capacity
+    mov RA_NEW_USED, X1 // Get new used amount.
     sub RA_TMP, RA_CHUNK_SIZE, #MEM_RECORD_SIZE // Available space in chunk
     cmp RA_NEW_USED, RA_TMP // Is new size <= available space?
     b.gt L_do_realloc // If no, do the expensive part.

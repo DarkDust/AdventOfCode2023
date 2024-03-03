@@ -25,6 +25,7 @@
 // uint{8,16,32,64}_t arrayX_get(arrayX * array, uint64_t index);
 // Get an element from the array.
 //
+//
 // void arrayX_set(arrayX ** array, uint64_t index, uint{8,16,32,64}_t value);
 // Set an element in the array. If the index == arrayX_count(array), the value
 // is appended. Otherwise, if the index is out of bounds, the process is
@@ -46,8 +47,13 @@
 // empty, -1 is returned.
 //
 //
-// void arrayX_clear(arrayX * array);
+// void arrayX_set_all_to_zero(arrayX * array);
 // Set all elements in the array to 0.
+//
+//
+// void arrayX_remove_all(arrayX * array);
+// Remove all elements, setting the array's size to 0.
+//
 //
 // arrayX * arrayX_clone(arrayX * array);
 // Creates an independent copy of the array.
@@ -87,11 +93,20 @@ L_a\name\()c_return:
     ldp FP, LR, [SP], #16
     ret
 
+
 .balign 4
 .global _array\name\()_free
 _array\name\()_free:
     bl _free // Not much to do, just call `free`
     ret
+
+
+.balign 4
+.global _array\name\()_count
+ _array\name\()_count:
+    ldr X0, [X0, #AX_OFFSET_COUNT]
+    ret
+
 
 .balign 4
 .global _array\name\()_get
@@ -105,6 +120,7 @@ _array\name\()_get:
     add X2, X2, #AX_RECORD_SIZE // Skip record
     \load \regsize\()0, [X0, X2] // Load the entry
     ret
+
 
 // These registers are _shared_ between _array4_set and _array_push so that the
 // former can jump into the later.
@@ -209,9 +225,10 @@ L_a\name\()pop_empty:
     mov X0, #-1
     ret
 
+
 .balign 4
-.global _array\name\()_clear
-_array\name\()_clear:
+.global _array\name\()_set_all_to_zero
+_array\name\()_set_all_to_zero:
     stp FP, LR, [SP, #-16]!
     mov FP, SP
 
@@ -223,7 +240,16 @@ _array\name\()_clear:
 
     mov SP, FP
     ldp FP, LR, [SP], #16
+
+
+.balign 4
+.global _array\name\()_remove_all
+_array\name\()_remove_all:
+    ldp REG_AX_COUNT, REG_AX_CAPACITY, [X0] // Get number of elements and capacity.
+    add REG_AX_CAPACITY, REG_AX_CAPACITY, REG_AX_COUNT // Adjust capacity.
+    stp XZR, REG_AX_CAPACITY, [X0] // Save count (0) and capacity back.
     ret
+
 
 .balign 4
 .global _array\name\()_clone

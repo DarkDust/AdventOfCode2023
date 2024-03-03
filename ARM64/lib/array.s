@@ -45,6 +45,13 @@
 // Removes the last element from the array and returns it. If the array is
 // empty, -1 is returned.
 //
+//
+// void arrayX_clear(arrayX * array);
+// Set all elements in the array to 0.
+//
+// arrayX * arrayX_clone(arrayX * array);
+// Creates an independent copy of the array.
+//
 //////////////////////////////////////////////////////////////////////////////
 
 .equ AX_OFFSET_COUNT, 0
@@ -200,6 +207,53 @@ _array\name\()_pop:
 
 L_a\name\()pop_empty:
     mov X0, #-1
+    ret
+
+.balign 4
+.global _array\name\()_clear
+_array\name\()_clear:
+    stp FP, LR, [SP, #-16]!
+    mov FP, SP
+
+    ldr X2, [X0, #AX_OFFSET_COUNT] // Get number of elements
+    lsl X2, X2, #\shift // Convert to byte size; arg 3 of memset
+    mov X1, #0 // Null byte; arg 2 of memset
+    add X0, X0, #AX_RECORD_SIZE // Start of content; arg 1 of memset
+    bl _memset
+
+    mov SP, FP
+    ldp FP, LR, [SP], #16
+    ret
+
+.balign 4
+.global _array\name\()_clone
+_array\name\()_clone:
+    stp FP, LR, [SP, #-16]!
+    mov FP, SP
+    stp X20, X21, [SP, #-16]!
+    str X22, [SP, #-16]!
+
+    mov X20, X0 // Save the array pointer
+    ldr X21, [X20, #AX_OFFSET_COUNT] // Get number of elements
+
+    mov X0, X21
+    bl _array\name\()_create // Allocate a new array
+    mov X22, X0 // Save pointer to new array
+
+    ldr X2, [X22, #AX_OFFSET_CAPACITY] // Get new array capacity
+    sub X2, X2, X21 // Adjust the capacity
+    stp X21, X2, [X22] // Save new count and capacity
+
+    add X0, X22, #AX_RECORD_SIZE // Arg 1: Start of destination array content
+    add X1, X20, #AX_RECORD_SIZE // Arg 2: Start of source array content
+    lsl X2, X21, #\shift // Arg 3: Number of bytes to copy
+    bl _memcpy
+
+    mov X0, X22 // Return value: pointer to new array
+    ldr X22, [SP], #16
+    ldp X20, X21, [SP], #16
+    mov SP, FP
+    ldp FP, LR, [SP], #16
     ret
 
 .endmacro

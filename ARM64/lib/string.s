@@ -95,8 +95,8 @@ _iterate_chars:
     b.eq L_ic_return0               // If so, just leave. X0 = return value = already 0.
 
     mov IC_COUNT, X1                // Save some values from the volatile registers
-    mov IC_HANDLER, X2
-    mov IC_CONTEXT, X3
+    mov IC_CONTEXT, X2
+    mov IC_HANDLER, X3
 
     bic IC_ALIGNED, X0, #7          // Round down to nearest aligned address.
     ldr IC_BUFFER, [IC_ALIGNED]     // Load 8 bytes
@@ -168,8 +168,8 @@ _iterate_lines:
     b.eq L_il_return0               // If so, just leave. X0 = return value = already 0.
 
     mov IL_COUNT, X1                // Save some values from the volatile registers
-    mov IL_HANDLER, X2
-    mov IL_CONTEXT, X3
+    mov IL_CONTEXT, X2
+    mov IL_HANDLER, X3
 
     mov IL_LINESTART, X0            // Set first line start
     bic IL_ALIGNED, X0, #7          // Round down to nearest aligned address.

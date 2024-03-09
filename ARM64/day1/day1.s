@@ -54,9 +54,9 @@ _part1:
     adrp X0, str_input@PAGE             // Load input string address
     add X0, X0, str_input@PAGEOFF
     mov X1, #str_input_len              // Set input string length
-    adrp X2, _process_part1@PAGE        // Load handler address
-    add X2, X2, _process_part1@PAGEOFF
-    mov X3, SP                          // "Context": address for our variables
+    mov X2, SP                          // "Context": address for our variables
+    adrp X3, _process_part1@PAGE        // Load handler address
+    add X3, X3, _process_part1@PAGEOFF
     bl _iterate_chars
 
     ldp W3, W4, [SP, #OFFSET_FIRST]     // Check the first/last values
@@ -131,9 +131,9 @@ _part2:
     adrp X0, str_input@PAGE             // Load input string address
     add X0, X0, str_input@PAGEOFF
     mov X1, #str_input_len              // Set input string length
-    adrp X2, _process_part2@PAGE        // Load handler address
-    add X2, X2, _process_part2@PAGEOFF
-    mov X3, SP                          // "Context": address for our variables
+    mov X2, SP                          // "Context": address for our variables
+    adrp X3, _process_part2@PAGE        // Load handler address
+    add X3, X3, _process_part2@PAGEOFF
     bl _iterate_lines
 
     adrp X0, str_part2@PAGE             // Print "Part 1:"

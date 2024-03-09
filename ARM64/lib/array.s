@@ -151,7 +151,7 @@ _array\name\()_set:
 
 L_a\name\()s_push:
     mov X1, X2 // Prepare jump inoto _array4_push
-    b L_a4p_push
+    b L_a\name\()p_push
 
 
 .balign 4

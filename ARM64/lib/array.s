@@ -14,6 +14,11 @@
 // elements). On error, NULL is returned.
 //
 //
+// arrayX * arrayX_create_with_length(uint64_t length);
+// Create a new dynamically sized array with given initial length. All elements
+// are set to zero. On error, NULL is returned.
+//
+//
 // void arrayX_free(arrayX * array);
 // Deallocate an array.
 //
@@ -95,10 +100,37 @@ L_a\name\()c_return:
 
 
 .balign 4
+.global _array\name\()_create_with_length
+_array\name\()_create_with_length:
+    stp FP, LR, [SP, #-16]!
+    mov FP, SP
+
+    // Remember the wanted size.
+    str X0, [SP, #-16]!
+
+    // Array starts with a count, and a minimum capacity.
+    add X0, X0, #AX_RECORD_SIZE
+    bl _malloc_wholepage // Allocate space.
+    cbz X0, L_a\name\()cwl_return // Leave if allocation failed (X0 == NULL)
+
+    // !!! Relies on the fact that allocation returns zeroed memory.
+    // X0 now is pointer to region, X1 its size.
+    sub X1, X1, #AX_RECORD_SIZE // Account for array header
+    lsr X1, X1, #\shift // Capacity in element = bytes / (1 << shift)
+    ldr X2, [SP], #16 // Pop requested size
+    sub X1, X1, X2 // Reduce capacity by requested size
+    stp X2, X1, [X0] // Save count and capacity
+
+L_a\name\()cwl_return:
+    mov SP, FP
+    ldp FP, LR, [SP], #16
+    ret
+
+
+.balign 4
 .global _array\name\()_free
 _array\name\()_free:
-    bl _free // Not much to do, just call `free`
-    ret
+    b _free // Not much to do, just call `free`
 
 
 .balign 4
@@ -150,7 +182,7 @@ _array\name\()_set:
     ret
 
 L_a\name\()s_push:
-    mov X1, X2 // Prepare jump inoto _array4_push
+    mov X1, X2 // Prepare jump into _arrayX_push
     b L_a\name\()p_push
 
 
@@ -168,7 +200,7 @@ L_a\name\()p_push:
 L_a\name\()p_do_push:
     lsl X3, REG_AX_COUNT, #\shift // X3 = count * (1 << shift)
     add X3, X3, #AX_RECORD_SIZE // X3 += header-size
-    \store \regsize\()2, [REG_AX_START, X3] // Store value
+    \store \regsize\()1, [REG_AX_START, X3] // Store value
     add REG_AX_COUNT, REG_AX_COUNT, #1 // Accounting
     sub REG_AX_CAPACITY, REG_AX_CAPACITY, #1
     stp REG_AX_COUNT, REG_AX_CAPACITY, [REG_AX_START] // Store updated accounting

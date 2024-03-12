@@ -63,6 +63,10 @@
 // arrayX * arrayX_clone(arrayX * array);
 // Creates an independent copy of the array.
 //
+//
+// void arrayX_enumerate(arrayX * array, void * context, bool (*handler) (uint64_t index, uint{8,16,32,64}_t value, void * context));
+// Enumerates all values. Stops if the handler returns false (0).
+//
 //////////////////////////////////////////////////////////////////////////////
 
 .equ AX_OFFSET_COUNT, 0
@@ -310,6 +314,46 @@ _array\name\()_clone:
     mov X0, X22 // Return value: pointer to new array
     ldr X22, [SP], #16
     ldp X20, X21, [SP], #16
+    mov SP, FP
+    ldp FP, LR, [SP], #16
+    ret
+
+EN_INDEX .req X20
+EN_COUNT .req X21
+EN_POINTER .req X22
+EN_HANDLER .req X23
+EN_CONTEXT .req X24
+
+.balign 4
+.global _array\name\()_enumerate
+_array\name\()_enumerate:
+    stp FP, LR, [SP, #-16]!
+    mov FP, SP
+    stp EN_INDEX, EN_COUNT, [SP, #-16]!
+    stp EN_POINTER, EN_HANDLER, [SP, #-16]!
+    str EN_CONTEXT, [SP, #-16]!
+
+    mov EN_CONTEXT, X1
+    mov EN_HANDLER, X2
+    ldr EN_COUNT, [X0, #AX_OFFSET_COUNT]
+    add EN_POINTER, X0, #AX_RECORD_SIZE
+    mov EN_INDEX, #0
+
+L_a\name\()en_loop:
+    mov X0, EN_INDEX
+    \load \regsize\()1, [EN_POINTER], #(1 << \shift)
+    mov X2, EN_CONTEXT
+    blr EN_HANDLER
+    cbz X0, L_a\name\()en_done
+
+    add EN_INDEX, EN_INDEX, #1
+    cmp EN_INDEX, EN_COUNT
+    b.lo L_a\name\()en_loop
+
+L_a\name\()en_done:
+    ldr EN_CONTEXT, [SP], #16
+    ldp EN_POINTER, EN_HANDLER, [SP], #16
+    ldp EN_INDEX, EN_COUNT, [SP], #16
     mov SP, FP
     ldp FP, LR, [SP], #16
     ret

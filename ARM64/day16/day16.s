@@ -110,24 +110,18 @@ _part2:
     stp FP, LR, [SP, #-16]!
     mov FP, SP
 
-    mov X0, #0
-    bl _array4_create
+    PRINT_STRING str_part2
 
-    str X0, [SP, #-16]!
-    mov X0, SP
-    mov X1, #1
-    bl _array4_push
+    // Initialize data structures.
+    bl init_contraption
 
-    mov X0, SP
-    mov X1, #2
-    bl _array4_push
+    mov X1, #0
+    mov X2, #0
+    mov X3, #DIR_EAST
+    bl trace_beams_from_all_sides
 
-    mov X20, #16384
-1:  mov X0, SP
-    mov X1, #42
-    bl _array4_push
-    subs X20, X20, #1
-    b.ne 1b
+    bl _print_uint64
+    bl _print_newline
 
     mov SP, FP
     ldp FP, LR, [SP], #16
@@ -670,7 +664,81 @@ accumulate_handler:
     str X0, [X2]
     mov X0, #1
     ret
-    
+
+
+AS_CONTRAPTION .req X20
+AS_MAX_ENERGIZED .req X21
+AS_INDEX .req X22
+AS_MAX_X .req X23
+AS_MAX_Y .req X24
+
+.macro AS_TRACE_BEAM x, y, dir
+    // Trace the beam.
+    mov X0, AS_CONTRAPTION
+    mov X1, \x
+    mov X2, \y
+    mov X3, \dir
+    bl trace_from
+
+    // Store max value (no `umax` on M1, unfortunately)
+    cmp AS_MAX_ENERGIZED, X0
+    csel AS_MAX_ENERGIZED, AS_MAX_ENERGIZED, X0, hi
+
+    // Reset the contraption.
+    ldr X0, [AS_CONTRAPTION, #CONTRAPTION_ENERGIZED]
+    bl _array1_set_all_to_zero
+    ldr X0, [AS_CONTRAPTION, #CONTRAPTION_CYCLE]
+    bl _array1_set_all_to_zero
+.endmacro
+
+
+// X0: Pointer to contraption
+.balign 4
+trace_beams_from_all_sides:
+    stp FP, LR, [SP, #-16]!
+    mov FP, SP
+    stp AS_CONTRAPTION, AS_MAX_ENERGIZED, [SP, #-16]!
+    str AS_INDEX, [SP, #-16]!
+    stp AS_MAX_X, AS_MAX_Y, [SP, #-16]!
+
+    mov AS_CONTRAPTION, X0
+    mov AS_MAX_ENERGIZED, XZR
+    ldr AS_MAX_X, [AS_CONTRAPTION, #CONTRAPTION_WIDTH]
+    ldr AS_MAX_Y, [AS_CONTRAPTION, #CONTRAPTION_HEIGHT]
+
+    sub AS_MAX_X, AS_MAX_X, #1
+    sub AS_MAX_Y, AS_MAX_Y, #1
+
+    mov AS_INDEX, AS_MAX_X
+L_as_loop1:
+    // Trace from top
+    AS_TRACE_BEAM AS_INDEX, #0, #DIR_SOUTH
+    // Trace from bottom
+    AS_TRACE_BEAM AS_INDEX, AS_MAX_Y, #DIR_NORTH
+
+    subs AS_INDEX, AS_INDEX, #1
+    b.pl L_as_loop1 // Loop while index >= 0
+
+    mov AS_INDEX, AS_MAX_Y
+L_as_loop2:
+    // Trace from left
+    AS_TRACE_BEAM #0, AS_INDEX, #DIR_EAST
+    // Trace from right
+    AS_TRACE_BEAM AS_MAX_X, AS_INDEX, #DIR_WEST
+
+    subs AS_INDEX, AS_INDEX, #1
+    b.pl L_as_loop2 // Loop while index >= 0
+
+    // Return the maximum
+    mov X0, AS_MAX_ENERGIZED
+
+    ldp AS_MAX_X, AS_MAX_Y, [SP], #16
+    ldr AS_INDEX, [SP], #16
+    ldp AS_CONTRAPTION, AS_MAX_ENERGIZED, [SP], #16
+    mov SP, FP
+    ldp FP, LR, [SP], #16
+    ret
+
 
 .const
 str_input: .incbin "../../day16/rsc/input.txt"

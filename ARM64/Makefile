@@ -1,3 +1,5 @@
+.DEFAULT_GOAL := all
+
 DAYS := $(wildcard day*)
 DAYS_BIN := $(foreach day,$(DAYS),$(day)/$(day))
 
@@ -13,6 +15,6 @@ all: $(DAYS_BIN)
 
 .PHONY: clean
 clean:
-	$(foreach day,$(DAYS),$(MAKE) -C $(day) clean)
+	$(foreach day,$(DAYS),$(MAKE) -C $(day) clean ;) 
 	rm -f lib/*.o
 

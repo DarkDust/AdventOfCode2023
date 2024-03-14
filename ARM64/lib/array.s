@@ -67,6 +67,10 @@
 // void arrayX_enumerate(arrayX * array, void * context, bool (*handler) (uint64_t index, uint{8,16,32,64}_t value, void * context));
 // Enumerates all values. Stops if the handler returns false (0).
 //
+//
+// uint{8,16,32,64} * arrayX_get_raw(arrayX * array);
+// Get access to the raw array buffer.
+//
 //////////////////////////////////////////////////////////////////////////////
 
 .equ AX_OFFSET_COUNT, 0
@@ -356,6 +360,12 @@ L_a\name\()en_done:
     ldp EN_INDEX, EN_COUNT, [SP], #16
     mov SP, FP
     ldp FP, LR, [SP], #16
+    ret
+
+.balign 4
+.global _array\name\()_get_raw
+_array\name\()_get_raw:
+    add X0, X0, #AX_RECORD_SIZE
     ret
 
 .endmacro

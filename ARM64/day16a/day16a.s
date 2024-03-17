@@ -187,122 +187,6 @@ init_contraption:
     ret
 
 
-TF_CONTRAPTION .req X19
-TF_BEAM_LIST .req X20
-TF_BEAM_LIST_P .req X21
-TF_BEAM_LIST_ALT_P .req X22
-TF_BEAM .req X23
-TF_INDEX .req X24
-
-// Trace a beam
-// X0: Contraption address
-// X1: X position
-// X2: Y position
-// X3: direction
-.balign 4
-trace_from:
-    stp FP, LR, [SP, #-16]!
-    mov FP, SP
-    stp TF_CONTRAPTION, TF_BEAM_LIST_ALT_P, [SP, #-16]!
-    stp TF_BEAM_LIST, TF_BEAM_LIST_P, [SP, #-16]!
-    stp TF_BEAM, TF_INDEX, [SP, #-16]!
-
-    mov TF_CONTRAPTION, X0
-    PACK_BEAM TF_BEAM, X1, X2, X3
-
-    mov X0, #1 // Create a list for the beams to process
-    bl _array8_create
-    str X0, [SP, #-16]!
-    mov TF_BEAM_LIST, X0
-    mov TF_BEAM_LIST_P, SP // Store pointer-to-pointer!
-
-    mov X0, TF_BEAM_LIST_P
-    mov X1, TF_BEAM // Push start steam to list
-    bl _array8_push
-
-    mov X0, #1 // Create a second list for the beams to process
-    bl _array8_create
-    str X0, [SP, #-16]!
-    mov TF_BEAM_LIST_ALT_P, SP // Store pointer-to-ponter!
-
-L_tf_loop:
-    // Get current list length
-    mov X0, TF_BEAM_LIST
-    bl _array8_count
-    cbz X0, L_tf_done // Leave if empty
-
-    sub TF_INDEX, X0, #1
-
-L_tf_inner_loop:
-    // Get next beam.
-    mov X0, TF_BEAM_LIST
-    mov X1, TF_INDEX
-    bl _array8_get
-
-    // Process it.
-    mov X1, TF_BEAM_LIST_ALT_P
-    mov X2, TF_CONTRAPTION
-    bl beam_step
-
-    // if (index-- > 0) goto inner_loop
-    cbz TF_INDEX, 1f
-    sub TF_INDEX, TF_INDEX, #1
-    b L_tf_inner_loop
-
-1:  // Clear the old list
-    mov X0, TF_BEAM_LIST
-    bl _array8_remove_all
-    // Swap the lists.
-    mov X0, TF_BEAM_LIST_P
-    mov TF_BEAM_LIST_P, TF_BEAM_LIST_ALT_P
-    mov TF_BEAM_LIST_ALT_P, X0
-    ldr TF_BEAM_LIST, [TF_BEAM_LIST_P]
-    // Loop
-    b L_tf_loop
-
-L_tf_done:
-    // Free up allocated memory
-    ldr X0, [TF_BEAM_LIST_P]
-    bl _array8_free
-    ldr X0, [TF_BEAM_LIST_ALT_P]
-    bl _array8_free
-
-   
-    // Get number of energized fields (return value of this function).
-    ldr X0, [TF_CONTRAPTION, #CONTRAPTION_ENERGIZED] // Arg 1: energized array
-    bl _array1_count
-
-    // Calculate number of 16 byte blocks to iterate (rounded up). Relies on
-    // the fact that memory is 16 byte aligned and unused parts are 0 (due to
-    // mach_vm_allocate).
-    add X0, X0, #15
-    lsr TF_INDEX, X0, #4
-
-    // Get the raw buffer.
-    ldr X0, [TF_CONTRAPTION, #CONTRAPTION_ENERGIZED] // Arg 1: energized array
-    bl _array1_get_raw
-
-    // Initialize accumulator (NEON register 0) with 0.
-    fmov D0, #0
-
-1:  ld1 { V1.16B }, [X0], #16 // Load 16 bytes into NEON register 1.
-    addv B2, V1.16B // Add all 16 bytes and save in NEON register 2.
-    add D0, D0, D2 // Add to accumulator.
-    subs TF_INDEX, TF_INDEX, #1 // Count down and loop if index > 0.
-    b.ne 1b
-
-    fmov X0, D0 // Get result from NEON register.
-
-    // Pop and return
-    add SP, SP, #32 // The two pointer-to-pointers
-    ldp TF_BEAM, TF_INDEX, [SP], #16
-    ldp TF_BEAM_LIST, TF_BEAM_LIST_P, [SP], #16
-    ldp TF_CONTRAPTION, TF_BEAM_LIST_ALT_P, [SP], #16
-    mov SP, FP
-    ldp FP, LR, [SP], #16
-    ret
-
-
 // Determine the size of the input.
 // X0 = Input string, X1 = Input string length.
 // Returns X dimension in X0, and Y dimension in X1
@@ -419,65 +303,190 @@ L_pc_newline:
     ret
 
 
+// ******************* Deliberate AArch64 ABI violation **********************
+//
+// To optimize some calls, all op_* functions expect a few registers to be set
+// which are usually volatile ("temporariy registers" in "Procedure Call
+// Standard for the Arm® 64-bit Architecture (AArch64)"), which means the
+// caller is supposed to save them if needed. But I'm not doing that and rely
+// on the fact that all subfunctions only use these registers for reading.
+//
+// This way, several stack load/saves and several moves can be omitted.
+OP_X .req X9
+OP_Y .req X10
+OP_DIR .req X11
+OP_WIDTH .req X12
+OP_HEIGHT .req X13
+OP_BEAM_LIST_P .req X14
+OP_CYCLE_RAW .req X15
+OP_ENERGIZED_RAW .req X16 // !!! aka IP0, used by dynamic linker
+OP_FIELDS_RAW .req X17 // aka IP1, used by dynamic linker
+// Use of X16 (IP0) and X17 (IP1) should be save since no functions of
+// dynamically linked frameworks are called, only our own functions. But I'm
+// not 100% sure.
 
-BS_X .req X20
-BS_Y .req X21
-BS_DIR .req X22
-BS_BEAM_LIST_P .req X23
-BS_CONTRAPTION .req X24
-BS_WIDTH .req X25
-BS_INDEX .req X26
 
-// X0: Packed beam to process.
-// X1: Pointer to next beams array.
-// X2: Pointer to contraption.
+TF_CONTRAPTION .req X19
+TF_BEAM_LIST .req X20
+TF_BEAM_LIST_P .req X21
+TF_BEAM_LIST_ALT_P .req X22
+TF_BEAM .req X23
+TF_INDEX .req X24
+
+// Trace a beam
+// X0: Contraption address
+// X1: X position
+// X2: Y position
+// X3: direction
 .balign 4
-beam_step:
+trace_from:
     stp FP, LR, [SP, #-16]!
     mov FP, SP
-    stp BS_X, BS_Y, [SP, #-16]!
-    str BS_DIR, [SP, #-16]!
-    stp BS_BEAM_LIST_P, BS_CONTRAPTION, [SP, #-16]!
-    stp BS_WIDTH, BS_INDEX, [SP, #-16]!
+    stp TF_CONTRAPTION, TF_BEAM_LIST_ALT_P, [SP, #-16]!
+    stp TF_BEAM_LIST, TF_BEAM_LIST_P, [SP, #-16]!
+    stp TF_BEAM, TF_INDEX, [SP, #-16]!
 
-    UNPACK_BEAM X0, BS_X, BS_Y, BS_DIR
-    mov BS_BEAM_LIST_P, X1
-    mov BS_CONTRAPTION, X2
+    mov TF_CONTRAPTION, X0
+    PACK_BEAM TF_BEAM, X1, X2, X3
+
+    // Set up most of the OP_* registers.
+    ldp OP_WIDTH, OP_HEIGHT, [X0, #CONTRAPTION_WIDTH]
+    
+    ldr X0, [TF_CONTRAPTION, #CONTRAPTION_FIELDS]
+    bl _array1_get_raw
+    mov OP_FIELDS_RAW, X0
+
+    ldr X0, [TF_CONTRAPTION, #CONTRAPTION_CYCLE]
+    bl _array1_get_raw
+    mov OP_CYCLE_RAW, X0
+
+    ldr X0, [TF_CONTRAPTION, #CONTRAPTION_ENERGIZED]
+    bl _array1_get_raw
+    mov OP_ENERGIZED_RAW, X0
+
+    mov X0, #1 // Create a list for the beams to process
+    bl _array8_create
+    str X0, [SP, #-16]!
+    mov TF_BEAM_LIST, X0
+    mov TF_BEAM_LIST_P, SP // Store pointer-to-pointer!
+
+    mov X0, TF_BEAM_LIST_P
+    mov X1, TF_BEAM // Push start beam to list
+    bl _array8_push
+
+    mov X0, #1 // Create a second list for the beams to process
+    bl _array8_create
+    str X0, [SP, #-16]!
+    mov TF_BEAM_LIST_ALT_P, SP // Store pointer-to-ponter!
+
+L_tf_loop:
+    // Get current list length
+    mov X0, TF_BEAM_LIST
+    bl _array8_count
+    cbz X0, L_tf_done // Leave if empty
+
+    sub TF_INDEX, X0, #1
+
+L_tf_inner_loop:
+    // Get next beam.
+    mov X0, TF_BEAM_LIST
+    mov X1, TF_INDEX
+    bl _array8_get
+
+    // Process it.
+    UNPACK_BEAM X0, OP_X, OP_Y, OP_DIR
+    mov OP_BEAM_LIST_P, TF_BEAM_LIST_ALT_P
+    bl op_beam_step
+
+    // if (index-- > 0) goto inner_loop
+    cbz TF_INDEX, 1f
+    sub TF_INDEX, TF_INDEX, #1
+    b L_tf_inner_loop
+
+1:  // Clear the old list
+    mov X0, TF_BEAM_LIST
+    bl _array8_remove_all
+    // Swap the lists.
+    mov X0, TF_BEAM_LIST_P
+    mov TF_BEAM_LIST_P, TF_BEAM_LIST_ALT_P
+    mov TF_BEAM_LIST_ALT_P, X0
+    ldr TF_BEAM_LIST, [TF_BEAM_LIST_P]
+    // Loop
+    b L_tf_loop
+
+L_tf_done:
+    // Free up allocated memory
+    ldr X0, [TF_BEAM_LIST_P]
+    bl _array8_free
+    ldr X0, [TF_BEAM_LIST_ALT_P]
+    bl _array8_free
+
+   
+    // Get number of energized fields (return value of this function).
+    // Calculate number of 16 byte blocks to iterate (rounded up). Relies on
+    // the fact that memory is 16 byte aligned and unused parts are 0 (due to
+    // mach_vm_allocate).
+    mul X0, OP_WIDTH, OP_HEIGHT
+    add X0, X0, #15
+    lsr TF_INDEX, X0, #4
+
+    // Get the raw buffer.
+    mov X0, OP_ENERGIZED_RAW
+
+    // Initialize accumulator (NEON register 0) with 0.
+    fmov D0, #0
+
+1:  ld1 { V1.16B }, [X0], #16 // Load 16 bytes into NEON register 1.
+    addv B2, V1.16B // Add all 16 bytes and save in NEON register 2.
+    add D0, D0, D2 // Add to accumulator.
+    subs TF_INDEX, TF_INDEX, #1 // Count down and loop if index > 0.
+    b.ne 1b
+
+    fmov X0, D0 // Get result from NEON register.
+
+    // Pop and return
+    add SP, SP, #32 // The two pointer-to-pointers
+    ldp TF_BEAM, TF_INDEX, [SP], #16
+    ldp TF_BEAM_LIST, TF_BEAM_LIST_P, [SP], #16
+    ldp TF_CONTRAPTION, TF_BEAM_LIST_ALT_P, [SP], #16
+    mov SP, FP
+    ldp FP, LR, [SP], #16
+    ret
+
+
+BS_CYCLE_INDEX .req X5
+BS_FIELD_INDEX .req X6
+
+// Arguments: OP_* registers
+.balign 4
+op_beam_step:
+    stp FP, LR, [SP, #-16]!
+    mov FP, SP
 
     // Calculate index for the cycle detector.
-    ldr BS_WIDTH, [BS_CONTRAPTION, #CONTRAPTION_WIDTH]
-    madd BS_INDEX, BS_WIDTH, BS_Y, BS_X // (width * y) + x
-    sub X4, BS_DIR, #1 // !!! Relies on direction being in range of 1 to 4
-    lsl BS_INDEX, BS_INDEX, #2 // Shift by two bits for the direction
-    orr BS_INDEX, BS_INDEX, X4 // Merge with direction
+    madd BS_FIELD_INDEX, OP_WIDTH, OP_Y, OP_X // (width * y) + x
+    sub X4, OP_DIR, #1 // !!! Relies on direction being in range of 1 to 4
+    lsl BS_CYCLE_INDEX, BS_FIELD_INDEX, #2 // Shift by two bits for the direction
+    orr BS_CYCLE_INDEX, BS_CYCLE_INDEX, X4 // Merge with direction
 
     // Check whether we've hit a cycle.
-    ldr X0, [BS_CONTRAPTION, #CONTRAPTION_CYCLE]
-    mov X1, BS_INDEX
-    bl _array1_get
+    ldrb W0, [OP_CYCLE_RAW, BS_CYCLE_INDEX]
     cbnz X0, L_bs_done // Leave if it's a cycle.
 
     // Mark for cycle detection.
-    add X0, BS_CONTRAPTION, #CONTRAPTION_CYCLE // !!! Pointer to pointer!
-    mov X1, BS_INDEX
-    mov X2, #1
-    bl _array1_set
+    mov X0, #1
+    strb W0, [OP_CYCLE_RAW, BS_CYCLE_INDEX]
 
     // Mark in energized array.
-    add X0, BS_CONTRAPTION, #CONTRAPTION_ENERGIZED // !!! Pointer to pointer!
-    madd X1, BS_WIDTH, BS_Y, BS_X // (width * y) + x
-    mov X2, #1
-    bl _array1_set
+    strb W0, [OP_ENERGIZED_RAW, BS_FIELD_INDEX]
 
     // Read field.
-    ldr X0, [BS_CONTRAPTION, #CONTRAPTION_FIELDS]
-    madd X1, BS_WIDTH, BS_Y, BS_X // (width * y) + x
-    bl _array1_get
+    ldrb W0, [OP_FIELDS_RAW, BS_FIELD_INDEX]
 
     // Combine the field value with direction to get an index into a jumptable.
     // Field is a value 0 – 4, so 3 bits. Direction is a value 1 – 4, reduced
     // by one we get 2 bits. So index is thus a 5 bits = 32 value field.
-    sub X1, BS_DIR, #1
+    sub X1, OP_DIR, #1
     bfi X0, X1, #3, #2
     // Use a jumptable to switch on the field. This will crash if the field
     // value is garbage.
@@ -520,99 +529,60 @@ L_bs_jumptable:
     nop                         //                                      11_111
 
 L_bs_go_north:
-    mov X0, BS_CONTRAPTION
-    mov X1, BS_X
-    mov X2, BS_Y
-    mov X3, #DIR_NORTH
-    mov X4, BS_BEAM_LIST_P
-    bl advance_beam
+    mov X0, #DIR_NORTH
+    bl op_advance_beam
     b L_bs_done
 
 L_bs_go_east:
-    mov X0, BS_CONTRAPTION
-    mov X1, BS_X
-    mov X2, BS_Y
-    mov X3, #DIR_EAST
-    mov X4, BS_BEAM_LIST_P
-    bl advance_beam
+    mov X0, #DIR_EAST
+    bl op_advance_beam
     b L_bs_done
 
 L_bs_go_south:
-    mov X0, BS_CONTRAPTION
-    mov X1, BS_X
-    mov X2, BS_Y
-    mov X3, #DIR_SOUTH
-    mov X4, BS_BEAM_LIST_P
-    bl advance_beam
+    mov X0, #DIR_SOUTH
+    bl op_advance_beam
     b L_bs_done
 
 L_bs_go_west:
-    mov X0, BS_CONTRAPTION
-    mov X1, BS_X
-    mov X2, BS_Y
-    mov X3, #DIR_WEST
-    mov X4, BS_BEAM_LIST_P
-    bl advance_beam
+    mov X0, #DIR_WEST
+    bl op_advance_beam
     b L_bs_done
 
 L_bs_split_horizontal:
-    mov X0, BS_CONTRAPTION
-    mov X1, BS_X
-    mov X2, BS_Y
-    mov X3, #DIR_EAST
-    mov X4, BS_BEAM_LIST_P
-    bl advance_beam
-    mov X0, BS_CONTRAPTION
-    mov X1, BS_X
-    mov X2, BS_Y
-    mov X3, #DIR_WEST
-    mov X4, BS_BEAM_LIST_P
-    bl advance_beam
+    mov X0, #DIR_EAST
+    bl op_advance_beam
+    mov X0, #DIR_WEST
+    bl op_advance_beam
     b L_bs_done
 
 L_bs_split_vertical:
-    mov X0, BS_CONTRAPTION
-    mov X1, BS_X
-    mov X2, BS_Y
-    mov X3, #DIR_NORTH
-    mov X4, BS_BEAM_LIST_P
-    bl advance_beam
-    mov X0, BS_CONTRAPTION
-    mov X1, BS_X
-    mov X2, BS_Y
-    mov X3, #DIR_SOUTH
-    mov X4, BS_BEAM_LIST_P
-    bl advance_beam
-    b L_bs_done
+    mov X0, #DIR_NORTH
+    bl op_advance_beam
+    mov X0, #DIR_SOUTH
+    bl op_advance_beam
+    // b L_bs_done
 
 L_bs_done:
-    ldp BS_WIDTH, BS_INDEX, [SP], #16
-    ldp BS_BEAM_LIST_P, BS_CONTRAPTION, [SP], #16
-    ldr BS_DIR, [SP], #16
-    ldp BS_X, BS_Y, [SP], #16
-
     mov SP, FP
     ldp FP, LR, [SP], #16
     ret
 
 
-// X0: Pointer to contraption
-// X1: X
-// X2: Y
-// X3: Direction
-// X4: Pointer to pointer to beam list
+// Arguments: OP_* registers
+// X0: Direction
 .balign 4
-advance_beam:
+op_advance_beam:
     stp FP, LR, [SP, #-16]!
     mov FP, SP
-    str X4, [SP, #-16]! // Save beam list
 
-    bl next_pos
+    mov X1, OP_X
+    mov X2, OP_Y
+    bl op_next_pos
     cbz X0, 1f
 
     PACK_BEAM X5, X1, X2, X0
 
-    ldr X0, [SP], #16
+    mov X0, OP_BEAM_LIST_P
     mov X1, X5
     bl _array8_push
 
@@ -621,22 +591,20 @@ advance_beam:
     ret
 
 
-
-// X0: contraption address
+// Arguments: OP_* registers
+// X0: Direction
 // X1: X pos
 // X2: Y pos
-// X3: direction
-//
 // Returns:
 // X0: == 0 if no next position, direction if there is one.
 // X1: X pos
 // X2: Y pos
 .balign 4
-next_pos:
+op_next_pos:
     // Use a jump table to "switch" on the direction. Of course, this will crash if you feed a
     // garbage direction.
     adr X4, L_np_jumptable
-    add X4, X4, X3, lsl #2
+    add X4, X4, X0, lsl #2
     br X4
 
 L_np_jumptable:
@@ -648,27 +616,25 @@ L_np_jumptable:
 L_np_west:
     // if X1 > 0 { Some(X1 - 1, X2) } else { None }
     subs X1, X1, #1
-    csel X0, X3, XZR, pl // X1 >= 0? If so, pass direction.
+    csel X0, X0, XZR, pl // X1 >= 0? If so, pass direction.
     ret
 
 L_np_north:
     // if X2 > 0 { Some(X1, X2 - 1) } else { None }
     subs X2, X2, #1
-    csel X0, X3, XZR, pl // X2 >= 0? If so, pass direction.
+    csel X0, X0, XZR, pl // X2 >= 0? If so, pass direction.
     ret
 
 L_np_east:
-    ldr X4, [X0, #CONTRAPTION_WIDTH] // Get width
     add X1, X1, #1
-    cmp X1, X4
-    csel X0, X3, XZR, lt // Is result within bounds? If so, pass direction.
+    cmp X1, OP_WIDTH
+    csel X0, X0, XZR, lt // Is result within bounds? If so, pass direction.
     ret
 
 L_np_south:
-    ldr X4, [X0, #CONTRAPTION_HEIGHT] // Get height
     add X2, X2, #1
-    cmp X2, X4
-    csel X0, X3, XZR, lt // Is result within bounds? If so, pass direction.
+    cmp X2, OP_HEIGHT
+    csel X0, X0, XZR, lt // Is result within bounds? If so, pass direction.
     ret
 
 

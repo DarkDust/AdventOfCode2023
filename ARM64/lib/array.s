@@ -31,6 +31,10 @@
 // Get an element from the array.
 //
 //
+// uint{8,16,32,64}_t arrayX_get_unchecked(arrayX * array, uint64_t index);
+// Get an element from the array. Skips range check.
+//
+//
 // void arrayX_set(arrayX ** array, uint64_t index, uint{8,16,32,64}_t value);
 // Set an element in the array. If the index == arrayX_count(array), the value
 // is appended. Otherwise, if the index is out of bounds, the process is
@@ -156,6 +160,15 @@ _array\name\()_get:
     cmp X1, X3
     b.ge L_out_of_range 
 
+    lsl X2, X1, #\shift // byte offset = index * (1 << shift)
+    add X2, X2, #AX_RECORD_SIZE // Skip record
+    \load \regsize\()0, [X0, X2] // Load the entry
+    ret
+
+
+.balign 4
+.global _array\name\()_get_unchecked
+_array\name\()_get_unchecked:
     lsl X2, X1, #\shift // byte offset = index * (1 << shift)
     add X2, X2, #AX_RECORD_SIZE // Skip record
     \load \regsize\()0, [X0, X2] // Load the entry

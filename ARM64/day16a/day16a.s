@@ -6,7 +6,9 @@
 .equ CONTRAPTION_HEIGHT, 16
 .equ CONTRAPTION_ENERGIZED, 24
 .equ CONTRAPTION_CYCLE, 32
-CONTRAPTION_TOTAL_SIZE = 40
+.equ CONTRAPTION_BEAM_LIST, 40
+.equ CONTRAPTION_BEAM_LIST_ALT, 48
+CONTRAPTION_TOTAL_SIZE = 56
 
 .equ FIELD_EMPTY, 0
 .equ FIELD_MIRROR_SLASH, 1
@@ -179,6 +181,15 @@ init_contraption:
     lsl X0, X21, #2 // For cycle detector, combine coordinates with direction
     bl _array1_create_with_length
     str X0, [X20, #CONTRAPTION_CYCLE]
+
+    // Create beam lists to operate on. A "current" list and a "next" list.
+    mov X0, #1
+    bl _array8_create
+    str X0, [X20, #CONTRAPTION_BEAM_LIST]
+
+    mov X0, #1
+    bl _array8_create
+    str X0, [X20, #CONTRAPTION_BEAM_LIST_ALT]
 
     mov X0, X20
     ldp X20, X21, [SP], #16
@@ -364,20 +375,15 @@ trace_from:
     bl _array1_get_raw
     mov OP_ENERGIZED_RAW, X0
 
-    mov X0, #1 // Create a list for the beams to process
-    bl _array8_create
-    str X0, [SP, #-16]!
-    mov TF_BEAM_LIST, X0
-    mov TF_BEAM_LIST_P, SP // Store pointer-to-pointer!
+    // Get pointers to the beam lists.
+    add TF_BEAM_LIST_ALT_P, TF_CONTRAPTION, #CONTRAPTION_BEAM_LIST_ALT
+    add TF_BEAM_LIST_P, TF_CONTRAPTION, #CONTRAPTION_BEAM_LIST
+    ldr TF_BEAM_LIST, [TF_BEAM_LIST_P]
 
+    // Push start beam to list
     mov X0, TF_BEAM_LIST_P
-    mov X1, TF_BEAM // Push start beam to list
+    mov X1, TF_BEAM
     bl _array8_push
-
-    mov X0, #1 // Create a second list for the beams to process
-    bl _array8_create
-    str X0, [SP, #-16]!
-    mov TF_BEAM_LIST_ALT_P, SP // Store pointer-to-ponter!
 
 L_tf_loop:
     // Get current list length
@@ -415,12 +421,7 @@ L_tf_inner_loop:
     b L_tf_loop
 
 L_tf_done:
-    // Free up allocated memory
-    ldr X0, [TF_BEAM_LIST_P]
-    bl _array8_free
-    ldr X0, [TF_BEAM_LIST_ALT_P]
-    bl _array8_free
-
+    // When we get here, both beam lists should be empty.
    
     // Get number of energized fields (return value of this function).
     // Calculate number of 16 byte blocks to iterate (rounded up). Relies on
@@ -436,7 +437,7 @@ L_tf_done:
     // Initialize accumulator (NEON register 0) with 0.
     fmov D0, #0
 
-1:  ld1 { V1.16B }, [X0], #16 // Load 16 bytes into NEON register 1.
+1:  ldr Q1, [X0], #16 // Load 16 bytes into NEON register 1.
     addv B2, V1.16B // Add all 16 bytes and save in NEON register 2.
     add D0, D0, D2 // Add to accumulator.
     subs TF_INDEX, TF_INDEX, #1 // Count down and loop if index > 0.
@@ -445,7 +446,6 @@ L_tf_done:
     fmov X0, D0 // Get result from NEON register.
 
     // Pop and return
-    add SP, SP, #32 // The two pointer-to-pointers
     ldp TF_BEAM, TF_INDEX, [SP], #16
     ldp TF_BEAM_LIST, TF_BEAM_LIST_P, [SP], #16
     ldp TF_CONTRAPTION, TF_BEAM_LIST_ALT_P, [SP], #16

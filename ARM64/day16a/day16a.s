@@ -397,7 +397,7 @@ L_tf_inner_loop:
     // Get next beam.
     mov X0, TF_BEAM_LIST
     mov X1, TF_INDEX
-    bl _array8_get
+    bl _array8_get_unchecked
 
     // Process it.
     UNPACK_BEAM X0, OP_X, OP_Y, OP_DIR
@@ -483,6 +483,10 @@ op_beam_step:
     // Read field.
     ldrb W0, [OP_FIELDS_RAW, BS_FIELD_INDEX]
 
+    // Most common case: FIELD_EMPTY. Saves the jump table calculations and one
+    // jump.
+    cbz X0, L_bs_go_same_dir
+
     // Combine the field value with direction to get an index into a jumptable.
     // Field is a value 0 – 4, so 3 bits. Direction is a value 1 – 4, reduced
     // by one we get 2 bits. So index is thus a 5 bits = 32 value field.
@@ -528,32 +532,49 @@ L_bs_jumptable:
     nop                         //                                      11_110
     nop                         //                                      11_111
 
+L_bs_go_same_dir:
+    mov X0, OP_DIR
+    bl op_advance_beam
+    mov SP, FP
+    ldp FP, LR, [SP], #16
+    ret
+
 L_bs_go_north:
     mov X0, #DIR_NORTH
     bl op_advance_beam
-    b L_bs_done
+    mov SP, FP
+    ldp FP, LR, [SP], #16
+    ret
 
 L_bs_go_east:
     mov X0, #DIR_EAST
     bl op_advance_beam
-    b L_bs_done
+    mov SP, FP
+    ldp FP, LR, [SP], #16
+    ret
 
 L_bs_go_south:
     mov X0, #DIR_SOUTH
     bl op_advance_beam
-    b L_bs_done
+    mov SP, FP
+    ldp FP, LR, [SP], #16
+    ret
 
 L_bs_go_west:
     mov X0, #DIR_WEST
     bl op_advance_beam
-    b L_bs_done
+    mov SP, FP
+    ldp FP, LR, [SP], #16
+    ret
 
 L_bs_split_horizontal:
     mov X0, #DIR_EAST
     bl op_advance_beam
     mov X0, #DIR_WEST
     bl op_advance_beam
-    b L_bs_done
+    mov SP, FP
+    ldp FP, LR, [SP], #16
+    ret
 
 L_bs_split_vertical:
     mov X0, #DIR_NORTH
@@ -602,28 +623,23 @@ op_advance_beam:
 .balign 4
 op_next_pos:
     // Use a jump table to "switch" on the direction. Of course, this will crash if you feed a
-    // garbage direction.
+    // garbage direction. Each case must be exactly 4 instructions (16 byte) long.
     adr X4, L_np_jumptable
-    add X4, X4, X0, lsl #2
+    add X4, X4, X0, lsl #4
     br X4
 
 L_np_jumptable:
     nop
-    b L_np_north
-    b L_np_east
-    b L_np_south
-    // b L_np_west // Skip the branch for the last case, directly start the case.
-L_np_west:
-    // if X1 > 0 { Some(X1 - 1, X2) } else { None }
-    subs X1, X1, #1
-    csel X0, X0, XZR, pl // X1 >= 0? If so, pass direction.
-    ret
+    nop
+    nop
+    nop
 
 L_np_north:
     // if X2 > 0 { Some(X1, X2 - 1) } else { None }
     subs X2, X2, #1
     csel X0, X0, XZR, pl // X2 >= 0? If so, pass direction.
     ret
+    nop
 
 L_np_east:
     add X1, X1, #1
@@ -637,6 +653,12 @@ L_np_south:
     csel X0, X0, XZR, lt // Is result within bounds? If so, pass direction.
     ret
 
+L_np_west:
+    // if X1 > 0 { Some(X1 - 1, X2) } else { None }
+    subs X1, X1, #1
+    csel X0, X0, XZR, pl // X1 >= 0? If so, pass direction.
+    ret
+    nop
 
 .balign 4
 accumulate_handler:
